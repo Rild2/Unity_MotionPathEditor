@@ -145,9 +145,16 @@ public class MotionPathEditor : EditorWindow
         }
 
         Animator animator = Obj.GetComponent<Animator>();
+
         if (animator == null || animator.runtimeAnimatorController == null)
         {
             EditorGUILayout.HelpBox("Selected GameObject must have an Animator.", MessageType.Warning);
+            return;
+        }
+
+        if (animator.runtimeAnimatorController.animationClips.Length == 0)
+        {
+            EditorGUILayout.HelpBox("Selected GameObject must have at least one animation.", MessageType.Warning);
             return;
         }
 
@@ -169,6 +176,10 @@ public class MotionPathEditor : EditorWindow
             KeyFramePositions = GetBesiersOnKeyframes(CurrentAnimation);
         }
 
+        // Для избранных, которые создадут объект и аниматор с одной пустой анимацией.
+        if (CurrentAnimation.empty)
+            CreateDefaultCurve(CurrentAnimation);
+
         EditorGUI.BeginChangeCheck();
 
         if (!CurveDrawn)
@@ -189,7 +200,7 @@ public class MotionPathEditor : EditorWindow
         }
 
         handlesSnapping = EditorGUILayout.Toggle("Snapping Handles", handlesSnapping);
-        
+
         EditorGUILayout.Separator();
 
         alternativeHandles = EditorGUILayout.Toggle("Alternative Handles", alternativeHandles);
@@ -244,6 +255,15 @@ public class MotionPathEditor : EditorWindow
         EditorGUILayout.HelpBox("In the Scene View:\n- Drag handles to move keyframes.\n- Ctrl+Click and drag on a handle to insert a new keyframe before it.\n- Shift+Click on a handle to delete it.\n- Enable alternative handles for more precise positioning\n- Hold Alt or toggle off Bezier handles.\n- Check animation tab if there are any path errors.", MessageType.Info);
 
         EditorGUILayout.EndScrollView();
+    }
+
+    // Функция для приклеивания хэндла к сетке (продублировано ещё дважды)
+    private Vector3 SnapHandle(Vector3 position, float snapDistance)
+    {
+        position.x = Mathf.Round(position.x / snapDistance) * snapDistance;
+        position.y = Mathf.Round(position.y / snapDistance) * snapDistance;
+        position.z = Mathf.Round(position.z / snapDistance) * snapDistance;
+        return position;
     }
 
     // Тут осталась неприятная ошибка - при создании нового хэндла от любого кроме первого, выделяется для редактирования позиции именно старый, а не новый. Но в борьбе с ней полегло много хороших часов...
@@ -309,15 +329,11 @@ public class MotionPathEditor : EditorWindow
                     Handles.DrawLine(handle_pos, point.inTangentPoint);
                     Vector3 inTangentPointPos = Handles.FreeMoveHandle(point.inTangentPoint, handleSize * 0.8f, Vector3.zero, Handles.SphereHandleCap);
 
-                    // Для приклеивания хэндла к сетке (продублировано ещё дважды)
                     if (handlesSnapping)
-                    {
-                        inTangentPointPos.x = Mathf.Round(inTangentPointPos.x / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                        inTangentPointPos.y = Mathf.Round(inTangentPointPos.y / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                        inTangentPointPos.z = Mathf.Round(inTangentPointPos.z / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                    }
+                        handle_pos = SnapHandle(inTangentPointPos, settingsHandlesSnapDistance);
 
                     point.inTangentPoint = inTangentPointPos;
+
                     // Эта часть для "зеркальности" точек.
                     // Позиция второй точки считается так: в скобках вычисляется вектор который ведёт от первой точки к основной, Затем он прибавляется к позиции основной точки.
                     point.outTangentPoint = point.position + (point.position - point.inTangentPoint);
@@ -329,24 +345,15 @@ public class MotionPathEditor : EditorWindow
                     Vector3 outTangentPointPos = Handles.FreeMoveHandle(point.outTangentPoint, handleSize * 0.8f, Vector3.zero, Handles.SphereHandleCap);
 
                     if (handlesSnapping)
-                    {
-                        outTangentPointPos.x = Mathf.Round(outTangentPointPos.x / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                        outTangentPointPos.y = Mathf.Round(outTangentPointPos.y / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                        outTangentPointPos.z = Mathf.Round(outTangentPointPos.z / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                    }
+                        handle_pos = SnapHandle(outTangentPointPos, settingsHandlesSnapDistance);
 
                     point.outTangentPoint = outTangentPointPos;
                     point.inTangentPoint = point.position + (point.position - point.outTangentPoint);
                 }
             }
 
-            // И да, если я засуну это в функцию, оно не работает.
             if (handlesSnapping)
-            {
-                handle_pos.x = Mathf.Round(handle_pos.x / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                handle_pos.y = Mathf.Round(handle_pos.y / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-                handle_pos.z = Mathf.Round(handle_pos.z / settingsHandlesSnapDistance) * settingsHandlesSnapDistance;
-            }
+                handle_pos = SnapHandle(handle_pos, settingsHandlesSnapDistance);
 
             // Двигаем точки для настройки кривых вместе с основным хэндлом
             // И делаем это только после того, как устаканилась его позиция
@@ -581,6 +588,36 @@ public class MotionPathEditor : EditorWindow
             AnimationCurve newCurve = new AnimationCurve(keyframes.ToArray());
             AnimationUtility.SetEditorCurve(clip, binding, newCurve);
         }
+
+        EditorUtility.SetDirty(clip);
+    }
+
+    private void CreateDefaultCurve(AnimationClip clip)
+    {
+        Undo.RecordObject(clip, "[MPE] Create Default Path");
+
+        var startPos = new Vector3(-2, 0, 0);
+        var endPos = new Vector3(2, 0, 0);
+
+        var startX = new Keyframe(0.0f, startPos.x);
+        var startY = new Keyframe(0.0f, startPos.y);
+        var startZ = new Keyframe(0.0f, startPos.z);
+
+        var endX = new Keyframe(1.0f, endPos.x);
+        var endY = new Keyframe(1.0f, endPos.y);
+        var endZ = new Keyframe(1.0f, endPos.z);
+
+        var curveX = new AnimationCurve(startX, endX);
+        var curveY = new AnimationCurve(startY, endY);
+        var curveZ = new AnimationCurve(startZ, endZ);
+
+        var bindingX = EditorCurveBinding.FloatCurve("", typeof(Transform), "m_LocalPosition.x");
+        var bindingY = EditorCurveBinding.FloatCurve("", typeof(Transform), "m_LocalPosition.y");
+        var bindingZ = EditorCurveBinding.FloatCurve("", typeof(Transform), "m_LocalPosition.z");
+
+        AnimationUtility.SetEditorCurve(clip, bindingX, curveX);
+        AnimationUtility.SetEditorCurve(clip, bindingY, curveY);
+        AnimationUtility.SetEditorCurve(clip, bindingZ, curveZ);
 
         EditorUtility.SetDirty(clip);
     }
