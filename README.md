@@ -1,2 +1,2 @@
-# -MPE-Unity-Motion-Path-Editor
+# [MPE] Unity MotionPathEditor
 Edit animation path in editor or in game with the Bezier curves
