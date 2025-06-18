@@ -120,7 +120,7 @@ public class MotionPathEditor : EditorWindow
             KeyFramePositions = GetBesiersOnKeyframes(CurrentAnimation);
     }
 
-    // Отдельная (неуместно большая) функция для нумерации позиций
+    // Отдельная (неуместно большая) функция для нумерации позици2й
     private void UpdateNumerationTextStyle()
     {
         if (numerationTextStyle == null)
@@ -169,16 +169,19 @@ public class MotionPathEditor : EditorWindow
 
         CurrentAnimation = clips[anim_index];
 
+        // Для избранных, которые создадут объект и аниматор с одной пустой анимацией.
+        if (CurrentAnimation.empty)
+        {
+            CreateDefaultCurve(CurrentAnimation);
+            return;
+        }
+
         // Если меняем анимацию, то обновляем кривую.
         if (_oldAnimation != CurrentAnimation)
         {
             _oldAnimation = CurrentAnimation;
             KeyFramePositions = GetBesiersOnKeyframes(CurrentAnimation);
         }
-
-        // Для избранных, которые создадут объект и аниматор с одной пустой анимацией.
-        if (CurrentAnimation.empty)
-            CreateDefaultCurve(CurrentAnimation);
 
         EditorGUI.BeginChangeCheck();
 
@@ -330,7 +333,7 @@ public class MotionPathEditor : EditorWindow
                     Vector3 inTangentPointPos = Handles.FreeMoveHandle(point.inTangentPoint, handleSize * 0.8f, Vector3.zero, Handles.SphereHandleCap);
 
                     if (handlesSnapping)
-                        handle_pos = SnapHandle(inTangentPointPos, settingsHandlesSnapDistance);
+                        inTangentPointPos = SnapHandle(inTangentPointPos, settingsHandlesSnapDistance);
 
                     point.inTangentPoint = inTangentPointPos;
 
@@ -345,7 +348,7 @@ public class MotionPathEditor : EditorWindow
                     Vector3 outTangentPointPos = Handles.FreeMoveHandle(point.outTangentPoint, handleSize * 0.8f, Vector3.zero, Handles.SphereHandleCap);
 
                     if (handlesSnapping)
-                        handle_pos = SnapHandle(outTangentPointPos, settingsHandlesSnapDistance);
+                        outTangentPointPos = SnapHandle(outTangentPointPos, settingsHandlesSnapDistance);
 
                     point.outTangentPoint = outTangentPointPos;
                     point.inTangentPoint = point.position + (point.position - point.outTangentPoint);
